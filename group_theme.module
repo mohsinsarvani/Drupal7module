@@ -1,0 +1,134 @@
+<?php
+
+/**
+ * Implements hook_enable()
+ */
+
+function group_theme_enable() {
+  /**
+   * check the field first that its already exist or not
+   */
+
+  if (!field_info_field('select_theme_group')) {
+
+    //     code for field
+
+    $field = array(
+      'field_name' => 'select_theme_group',
+      'entity_type' => array(),
+      'module' => 'list',
+      'settings' => array(
+        'allowed_values' => array(),
+        'allowed_values_function' => 'group_theme_field_allowed_values',
+      ),
+      'type' => 'list_text',
+    );
+    field_create_field($field);
+
+
+//     create instance of the field
+
+    $instance = array(
+
+      'default_value' => NULL,
+      'entity_type' => 'group',
+      'field_name' => 'select_theme_group',
+      'label' => 'Select Theme',
+      'required' => TRUE,
+      'settings' => array(
+        'user_register_form' => FALSE,
+      ),
+      'display' => array(
+        'default' => array(
+          'label' => 'above',
+          'module' => 'list',
+          'settings' => array(),
+          'type' => 'list_default',
+          'weight' => 0,
+        ),
+      ),
+      'widget' => array(
+        'active' => 1,
+        'module' => 'options',
+        'settings' => array(),
+        'type' => 'options_select',
+        'weight' => 0,
+      ),
+    );
+
+    /**
+     * Get all the group types and make field in every group type
+     */
+    $group_type = db_select('group_type', 'gt')
+      ->fields('gt');
+    $group_type_result = $group_type->execute();
+    //$test = array();
+    while ($group_type_rows = $group_type_result->fetchAssoc()) {
+      $group_types[] = $group_type_rows;
+    }
+    //dsm($test);
+    foreach ($group_types as $key => $values) {
+      $instance['bundle'] = $values['name'];
+      field_create_instance($instance);
+    }
+  }
+}
+
+
+/**
+ * Implements hook_custom_theme()
+ */
+
+function group_theme_custom_theme() {
+  if (arg(0) == 'group') {
+    $arg = arg(1);
+    drupal_session_start();
+    $_SESSION['arg'] = $arg;
+
+  }
+
+  $query = db_select('field_data_select_theme_group','gth');
+  $query->join('groups', 'g', 'gth.entity_id = g.gid');
+  $query->join('group_entity', 'ge', 'gth.entity_id = ge.gid');
+  $query->fields('gth', array('select_theme_group_value'));
+  $query->condition('gth.entity_id', $_SESSION['arg'] , '=');
+  $result = $query->execute();
+
+  while ($theme_result = $result->fetchAssoc()) {
+    if (!empty($theme_result['select_theme_group_value']) && $theme_result['select_theme_group_value'] != '__default') {
+      return $theme_result['select_theme_group_value'];
+    }
+  }
+}
+
+
+
+
+/**
+ * Return all enabled themes
+ */
+
+function group_theme_field_allowed_values() {
+  $return = array('__default' => t('Use site-wide theme'));
+
+  module_load_include('inc', 'system', 'system.admin');
+  $themes = list_themes();
+  uasort($themes, 'system_sort_modules_by_info_name');
+
+  foreach ($themes as $key => $value) {
+    if ($value->status) {
+      $return[$key] = check_plain($value->info['name']);
+    }
+  }
+  return $return;
+}
+
+
+
+/**
+ *  Implements hook_disbale() to remove the field and all the field instances
+ */
+
+function group_theme_disable() {
+  field_delete_field('select_theme_group');
+}
